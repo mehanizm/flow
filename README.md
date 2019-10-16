@@ -1,6 +1,6 @@
 #  FLOW
 
-Simple read-process-right worker with goroutines.
+Simple read-process-write worker with goroutines.
 
 ## Usage
 
