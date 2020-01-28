@@ -14,6 +14,15 @@ type Flow struct {
 
 const chanBuffer = 100
 
+// NewFlow initialize new flow instance
+func NewFlow() *Flow {
+	return &Flow{
+		In:      make(map[string]Reader, 0),
+		Out:     make(map[string]Writer, 0),
+		Process: make(map[string]Processor, 0),
+	}
+}
+
 // Reader input data to flow
 type Reader interface {
 	ReadDataToChan() (inChan chan *map[string]string)
