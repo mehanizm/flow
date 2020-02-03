@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"errors"
 	"sync"
 )
 
@@ -69,9 +70,24 @@ func (f *Flow) AddProcessFlow(key string, process Processor) {
 }
 
 // Serve flow in concurrent mode
-func (f *Flow) Serve(workersCount int, in, out, process string) {
+func (f *Flow) Serve(workersCount int, in, out, process string) error {
 
-	inChan := f.In[in].ReadDataToChan()
+	reader, ok := f.In[in]
+	if !ok {
+		return errors.New("There is no InFlow with the specified key")
+	}
+
+	processor, ok := f.Process[process]
+	if !ok {
+		return errors.New("There is no Processor with the specified key")
+	}
+
+	writer, ok := f.Out[out]
+	if !ok {
+		return errors.New("There is no Writer with the specified key")
+	}
+
+	inChan := reader.ReadDataToChan()
 	outChan := make(chan *map[string]string, chanBuffer)
 
 	wgWorkers := &sync.WaitGroup{}
@@ -79,15 +95,17 @@ func (f *Flow) Serve(workersCount int, in, out, process string) {
 
 	for workerNum := 0; workerNum < workersCount; workerNum++ {
 		wgWorkers.Add(1)
-		go f.Process[process].ProcessMessage(wgWorkers, inChan, outChan, workerNum)
+		go processor.ProcessMessage(wgWorkers, inChan, outChan, workerNum)
 	}
 
 	wgWriter.Add(1)
-	go f.Out[out].WriteDataFromChan(wgWriter, outChan)
+	go writer.WriteDataFromChan(wgWriter, outChan)
 
 	wgWorkers.Wait()
 	close(outChan)
 
 	wgWriter.Wait()
+
+	return nil
 
 }
