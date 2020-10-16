@@ -1,23 +1,25 @@
 package flow
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 )
 
 // Flow is the abstract flow worker
 // to operate input, output and process
 type Flow struct {
+	mu      sync.Mutex
 	In      map[string]Reader
 	Out     map[string]Writer
 	Process map[string]Processor
 }
 
-const chanBuffer = 100
+var ChanBuffer = 100
 
 // NewFlow initialize new flow instance
 func NewFlow() *Flow {
 	return &Flow{
+		mu:      sync.Mutex{},
 		In:      make(map[string]Reader, 0),
 		Out:     make(map[string]Writer, 0),
 		Process: make(map[string]Processor, 0),
@@ -26,17 +28,17 @@ func NewFlow() *Flow {
 
 // Reader input data to flow
 type Reader interface {
-	ReadDataToChan() (inChan chan *map[string]string)
+	ReadDataToChan() (inChan chan map[string]string)
 }
 
 // Writer output data from flow
 type Writer interface {
-	WriteDataFromChan(wg *sync.WaitGroup, outChan chan *map[string]string)
+	WriteDataFromChan(wg *sync.WaitGroup, outChan chan map[string]string)
 }
 
 // Processor data in flow
 type Processor interface {
-	ProcessMessage(wg *sync.WaitGroup, inChan, outChan chan *map[string]string, goroutineNum int)
+	ProcessMessage(wg *sync.WaitGroup, inChan, outChan chan map[string]string, goroutineNum int)
 }
 
 // SetInFlow in setter
@@ -70,39 +72,46 @@ func (f *Flow) AddProcessFlow(key string, process Processor) {
 }
 
 // Serve flow in concurrent mode
-func (f *Flow) Serve(workersCount int, in, out, process string) error {
+func (f *Flow) Serve(workersCount int, in, out string, processors []string) error {
 
 	reader, ok := f.In[in]
 	if !ok {
-		return errors.New("There is no InFlow with the specified key")
-	}
-
-	processor, ok := f.Process[process]
-	if !ok {
-		return errors.New("There is no Processor with the specified key")
+		return fmt.Errorf("There is no InFlow with the specified key: %v", in)
 	}
 
 	writer, ok := f.Out[out]
 	if !ok {
-		return errors.New("There is no Writer with the specified key")
+		return fmt.Errorf("There is no Writer with the specified key: %v", out)
 	}
 
-	inChan := reader.ReadDataToChan()
-	outChan := make(chan *map[string]string, chanBuffer)
+	processorsCount := len(processors)
+	wgWorkers := make([]*sync.WaitGroup, 0)
+	processorsChannels := []chan map[string]string{reader.ReadDataToChan()}
 
-	wgWorkers := &sync.WaitGroup{}
+	for processorNum, processorName := range processors {
+
+		processor, ok := f.Process[processorName]
+		if !ok {
+			return fmt.Errorf("There is no Processor with the specified key: %v", processorName)
+		}
+
+		wgWorkers = append(wgWorkers, &sync.WaitGroup{})
+		processorsChannels = append(processorsChannels, make(chan map[string]string, ChanBuffer))
+
+		for workerNum := 0; workerNum < workersCount; workerNum++ {
+			wgWorkers[processorNum].Add(1)
+			go processor.ProcessMessage(wgWorkers[processorNum], processorsChannels[processorNum], processorsChannels[processorNum+1], workerNum)
+		}
+	}
+
 	wgWriter := &sync.WaitGroup{}
-
-	for workerNum := 0; workerNum < workersCount; workerNum++ {
-		wgWorkers.Add(1)
-		go processor.ProcessMessage(wgWorkers, inChan, outChan, workerNum)
-	}
-
 	wgWriter.Add(1)
-	go writer.WriteDataFromChan(wgWriter, outChan)
+	go writer.WriteDataFromChan(wgWriter, processorsChannels[processorsCount])
 
-	wgWorkers.Wait()
-	close(outChan)
+	for wgWorkerNum, wgWorker := range wgWorkers {
+		wgWorker.Wait()
+		close(processorsChannels[wgWorkerNum+1])
+	}
 
 	wgWriter.Wait()
 
