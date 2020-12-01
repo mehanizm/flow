@@ -10,17 +10,38 @@ import (
 
 const testSize = 100
 
-type mockReader struct{}
+type mockReader struct {
+	cancel chan struct{}
+	sleep  int
+}
+
+func newMockReader(sleep int) *mockReader {
+	return &mockReader{
+		cancel: make(chan struct{}),
+		sleep:  sleep,
+	}
+}
 
 func (mr *mockReader) ReadDataToChan() (inChan chan map[string]string) {
 	out := make(chan map[string]string)
 	go func() {
+	LOOP:
 		for i := 0; i < testSize; i++ {
+			select {
+			case <-mr.cancel:
+				break LOOP
+			default:
+			}
+			time.Sleep(time.Duration(mr.sleep) * time.Millisecond)
 			out <- map[string]string{"number1": fmt.Sprintf("%v", i)}
 		}
 		close(out)
 	}()
 	return out
+}
+
+func (mr *mockReader) Cancel() {
+	mr.cancel <- struct{}{}
 }
 
 type mockWriter struct{}
@@ -43,6 +64,10 @@ func (mw *mockWriter) WriteDataFromChan(wg *sync.WaitGroup, outChan chan map[str
 			panic(fmt.Sprintf("mistake in test, does not equal: %+v", m))
 		}
 		// fmt.Println(m)
+	}
+	if count == 4 {
+		fmt.Println("it was cancel event")
+		return
 	}
 	if count != testSize {
 		panic(fmt.Sprintf("mistake in test, wrong test_size: %v", count))
@@ -78,7 +103,7 @@ func (mp2 *mockProcess2) ProcessMessage(wg *sync.WaitGroup, inChan, outChan chan
 func TestFlow_Serve(t *testing.T) {
 
 	flow := NewFlow()
-	flow.AddInFlow("in", &mockReader{})
+	flow.AddInFlow("in", newMockReader(0))
 	flow.AddOutFlow("out", &mockWriter{})
 	flow.AddProcessFlow("1", &mockProcess1{})
 	flow.AddProcessFlow("2", &mockProcess2{})
@@ -90,10 +115,37 @@ func TestFlow_Serve(t *testing.T) {
 
 }
 
-func TestFlow_ServerError(t *testing.T) {
+func TestFlow_ServeWithCancel(t *testing.T) {
 
 	flow := NewFlow()
-	flow.SetInFlow(map[string]Reader{"in": &mockReader{}})
+	flow.AddInFlow("in", newMockReader(100))
+	flow.AddOutFlow("out", &mockWriter{})
+	flow.AddProcessFlow("1", &mockProcess1{})
+	flow.AddProcessFlow("2", &mockProcess2{})
+
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		err := flow.Stop("not_exist")
+		if err == nil {
+			t.Error("should be an error")
+		}
+		err = flow.Stop("in")
+		if err != nil {
+			t.Error("was error", err)
+		}
+
+	}()
+	err := flow.Serve(5, "in", "out", []string{"1", "2"})
+	if err != nil {
+		t.Error("was error", err)
+	}
+
+}
+
+func TestFlow_ServerWithError(t *testing.T) {
+
+	flow := NewFlow()
+	flow.SetInFlow(map[string]Reader{"in": newMockReader(0)})
 	flow.SetOutFlow(map[string]Writer{"out": &mockWriter{}})
 	flow.SetProcessFlow(map[string]Processor{"1": &mockProcess1{}, "2": &mockProcess2{}})
 

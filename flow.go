@@ -29,6 +29,7 @@ func NewFlow() *Flow {
 // Reader input data to flow
 type Reader interface {
 	ReadDataToChan() (inChan chan map[string]string)
+	Cancel()
 }
 
 // Writer output data from flow
@@ -71,6 +72,15 @@ func (f *Flow) AddProcessFlow(key string, process Processor) {
 	f.Process[key] = process
 }
 
+func (f *Flow) Stop(in string) error {
+	reader, ok := f.In[in]
+	if !ok {
+		return fmt.Errorf("There is no InFlow with the specified key: %v", in)
+	}
+	reader.Cancel()
+	return nil
+}
+
 // Serve flow in concurrent mode
 func (f *Flow) Serve(workersCount int, in, out string, processors []string) error {
 
@@ -81,7 +91,7 @@ func (f *Flow) Serve(workersCount int, in, out string, processors []string) erro
 
 	writer, ok := f.Out[out]
 	if !ok {
-		return fmt.Errorf("There is no Writer with the specified key: %v", out)
+		return fmt.Errorf("There is no OutFlow with the specified key: %v", out)
 	}
 
 	processorsCount := len(processors)
