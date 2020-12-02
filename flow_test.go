@@ -11,12 +11,15 @@ import (
 const testSize = 100
 
 type mockReader struct {
-	cancel chan struct{}
-	sleep  int
+	mu        sync.Mutex
+	cancel    chan struct{}
+	isReading bool
+	sleep     int
 }
 
 func newMockReader(sleep int) *mockReader {
 	return &mockReader{
+		mu:     sync.Mutex{},
 		cancel: make(chan struct{}),
 		sleep:  sleep,
 	}
@@ -25,6 +28,9 @@ func newMockReader(sleep int) *mockReader {
 func (mr *mockReader) ReadDataToChan() (inChan chan map[string]string) {
 	out := make(chan map[string]string)
 	go func() {
+		mr.mu.Lock()
+		mr.isReading = true
+		mr.mu.Unlock()
 	LOOP:
 		for i := 0; i < testSize; i++ {
 			select {
@@ -35,13 +41,20 @@ func (mr *mockReader) ReadDataToChan() (inChan chan map[string]string) {
 			time.Sleep(time.Duration(mr.sleep) * time.Millisecond)
 			out <- map[string]string{"number1": fmt.Sprintf("%v", i)}
 		}
+		mr.mu.Lock()
+		defer mr.mu.Unlock()
+		mr.isReading = false
 		close(out)
 	}()
 	return out
 }
 
 func (mr *mockReader) Cancel() {
-	mr.cancel <- struct{}{}
+	mr.mu.Lock()
+	defer mr.mu.Unlock()
+	if mr.isReading {
+		mr.cancel <- struct{}{}
+	}
 }
 
 type mockWriter struct{}
@@ -117,7 +130,7 @@ func TestFlow_Serve(t *testing.T) {
 
 func TestFlow_ServeWithCancel(t *testing.T) {
 
-	flow := NewFlow()
+	flow := NewFlow().WithChanBuffer(1)
 	flow.AddInFlow("in", newMockReader(100))
 	flow.AddOutFlow("out", &mockWriter{})
 	flow.AddProcessFlow("1", &mockProcess1{})

@@ -5,25 +5,32 @@ import (
 	"sync"
 )
 
+const chanBufferDefault = 100
+
 // Flow is the abstract flow worker
 // to operate input, output and process
 type Flow struct {
-	mu      sync.Mutex
-	In      map[string]Reader
-	Out     map[string]Writer
-	Process map[string]Processor
+	mu         sync.Mutex
+	chanBuffer uint16
+	In         map[string]Reader
+	Out        map[string]Writer
+	Process    map[string]Processor
 }
-
-var ChanBuffer = 100
 
 // NewFlow initialize new flow instance
 func NewFlow() *Flow {
 	return &Flow{
-		mu:      sync.Mutex{},
-		In:      make(map[string]Reader, 0),
-		Out:     make(map[string]Writer, 0),
-		Process: make(map[string]Processor, 0),
+		mu:         sync.Mutex{},
+		chanBuffer: chanBufferDefault,
+		In:         make(map[string]Reader, 0),
+		Out:        make(map[string]Writer, 0),
+		Process:    make(map[string]Processor, 0),
 	}
+}
+
+func (f *Flow) WithChanBuffer(chanBuffer uint16) *Flow {
+	f.chanBuffer = chanBuffer
+	return f
 }
 
 // Reader input data to flow
@@ -106,7 +113,7 @@ func (f *Flow) Serve(workersCount int, in, out string, processors []string) erro
 		}
 
 		wgWorkers = append(wgWorkers, &sync.WaitGroup{})
-		processorsChannels = append(processorsChannels, make(chan map[string]string, ChanBuffer))
+		processorsChannels = append(processorsChannels, make(chan map[string]string, f.chanBuffer))
 
 		for workerNum := 0; workerNum < workersCount; workerNum++ {
 			wgWorkers[processorNum].Add(1)
