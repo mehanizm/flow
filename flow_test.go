@@ -138,15 +138,7 @@ func TestFlow_ServeWithCancel(t *testing.T) {
 
 	go func() {
 		time.Sleep(400 * time.Millisecond)
-		err := flow.Stop("not_exist")
-		if err == nil {
-			t.Error("should be an error")
-		}
-		err = flow.Stop("in")
-		if err != nil {
-			t.Error("was error", err)
-		}
-
+		flow.Stop()
 	}()
 	err := flow.Serve(5, "in", "out", []string{"1", "2"})
 	if err != nil {

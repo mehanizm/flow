@@ -79,13 +79,13 @@ func (f *Flow) AddProcessFlow(key string, process Processor) {
 	f.Process[key] = process
 }
 
-func (f *Flow) Stop(in string) error {
-	reader, ok := f.In[in]
-	if !ok {
-		return fmt.Errorf("There is no InFlow with the specified key: %v", in)
+// Stop stops reading
+// important that Reader should be tollerant to Cancel
+// if it is not reading
+func (f *Flow) Stop() {
+	for _, reader := range f.In {
+		reader.Cancel()
 	}
-	reader.Cancel()
-	return nil
 }
 
 // Serve flow in concurrent mode
