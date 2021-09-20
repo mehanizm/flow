@@ -3,28 +3,38 @@ package flow
 import (
 	"fmt"
 	"sync"
+	"time"
 )
 
 const chanBufferDefault = 100
 
+type flowConfig struct {
+	in, out      string
+	processors   []string
+	chanBuffer   uint16
+	workersCount int
+}
+
 // Flow is the abstract flow worker
 // to operate input, output and process
 type Flow struct {
-	mu         sync.Mutex
-	chanBuffer uint16
-	In         map[string]Reader
-	Out        map[string]Writer
-	Process    map[string]Processor
+	flowConfig
+	status  *flowStatus
+	In      map[string]Reader
+	Out     map[string]Writer
+	Process map[string]Processor
 }
 
 // NewFlow initialize new flow instance
 func NewFlow() *Flow {
 	return &Flow{
-		mu:         sync.Mutex{},
-		chanBuffer: chanBufferDefault,
-		In:         make(map[string]Reader, 0),
-		Out:        make(map[string]Writer, 0),
-		Process:    make(map[string]Processor, 0),
+		flowConfig: flowConfig{
+			chanBuffer: chanBufferDefault,
+		},
+		status:  newFlowStatus(),
+		In:      make(map[string]Reader, 0),
+		Out:     make(map[string]Writer, 0),
+		Process: make(map[string]Processor, 0),
 	}
 }
 
@@ -37,6 +47,7 @@ func (f *Flow) WithChanBuffer(chanBuffer uint16) *Flow {
 type Reader interface {
 	ReadDataToChan() (inChan chan map[string]string)
 	Cancel()
+	GetReadStatus() (countRead, countMax uint64)
 }
 
 // Writer output data from flow
@@ -82,14 +93,45 @@ func (f *Flow) AddProcessFlow(key string, process Processor) {
 // Stop stops reading
 // important that Reader should be tollerant to Cancel
 // if it is not reading
-func (f *Flow) Stop() {
-	for _, reader := range f.In {
-		reader.Cancel()
+func (f *Flow) Stop() error {
+	err := f.status.cancelling()
+	if err != nil {
+		return err
 	}
+	f.In[f.in].Cancel()
+	f.status.cancell()
+	return nil
+}
+
+func (f *Flow) GetReadCounts() (countRead, countMax uint64) {
+	return f.In[f.in].GetReadStatus()
+}
+
+func (f *Flow) GetStatus() (Status, time.Time, time.Time, string) {
+	return f.status.get()
 }
 
 // Serve flow in concurrent mode
 func (f *Flow) Serve(workersCount int, in, out string, processors []string) error {
+	err := f.status.start()
+	if err != nil {
+		return err
+	}
+	err = f.serve(workersCount, in, out, processors)
+	if err != nil {
+		f.status.error(err.Error())
+	} else {
+		f.status.finish()
+	}
+	return err
+}
+
+func (f *Flow) serve(workersCount int, in, out string, processors []string) error {
+
+	f.in = in
+	f.out = out
+	f.processors = processors
+	f.workersCount = workersCount
 
 	reader, ok := f.In[in]
 	if !ok {

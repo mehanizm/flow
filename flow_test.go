@@ -20,7 +20,7 @@ type mockReader struct {
 func newMockReader(sleep int) *mockReader {
 	return &mockReader{
 		mu:     sync.Mutex{},
-		cancel: make(chan struct{}),
+		cancel: make(chan struct{}, 2),
 		sleep:  sleep,
 	}
 }
@@ -55,6 +55,10 @@ func (mr *mockReader) Cancel() {
 	if mr.isReading {
 		mr.cancel <- struct{}{}
 	}
+}
+
+func (mr *mockReader) GetReadStatus() (countRead, countMax uint64) {
+	return 0, 0
 }
 
 type mockWriter struct{}
@@ -126,6 +130,10 @@ func TestFlow_Serve(t *testing.T) {
 		t.Error("was error", err)
 	}
 
+	status, _, _, _ := flow.GetStatus()
+	if status != FINISHED {
+		t.Errorf("wrong status: %s", status)
+	}
 }
 
 func TestFlow_ServeWithCancel(t *testing.T) {
@@ -138,7 +146,14 @@ func TestFlow_ServeWithCancel(t *testing.T) {
 
 	go func() {
 		time.Sleep(400 * time.Millisecond)
-		flow.Stop()
+		err := flow.Stop()
+		if err != nil {
+			t.Error("was error", err)
+		}
+		err = flow.Stop()
+		if err == nil {
+			t.Error("should be an error but not")
+		}
 	}()
 	err := flow.Serve(5, "in", "out", []string{"1", "2"})
 	if err != nil {
