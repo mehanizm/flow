@@ -43,6 +43,10 @@ func (f *Flow) WithChanBuffer(chanBuffer uint16) *Flow {
 	return f
 }
 
+func (f *Flow) IsRunning() bool {
+	return f.status.isRunning()
+}
+
 // Reader input data to flow
 type Reader interface {
 	ReadDataToChan() (inChan chan map[string]string)

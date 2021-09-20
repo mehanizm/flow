@@ -54,6 +54,10 @@ func (fs *flowStatus) isCancellable() bool {
 	return fs.status == PROCESSING
 }
 
+func (fs *flowStatus) isRunning() bool {
+	return fs.status == PROCESSING
+}
+
 func (fs *flowStatus) start() error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
