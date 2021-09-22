@@ -20,6 +20,7 @@ type flowConfig struct {
 type Flow struct {
 	flowConfig
 	status  *flowStatus
+	mu      sync.Mutex
 	In      map[string]Reader
 	Out     map[string]Writer
 	Process map[string]Processor
@@ -32,6 +33,7 @@ func NewFlow() *Flow {
 			chanBuffer: chanBufferDefault,
 		},
 		status:  newFlowStatus(),
+		mu:      sync.Mutex{},
 		In:      make(map[string]Reader, 0),
 		Out:     make(map[string]Writer, 0),
 		Process: make(map[string]Processor, 0),
@@ -102,6 +104,8 @@ func (f *Flow) Stop() error {
 	if err != nil {
 		return err
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.In[f.in].Cancel()
 	f.status.cancell()
 	return nil
@@ -132,10 +136,12 @@ func (f *Flow) Serve(workersCount int, in, out string, processors []string) erro
 
 func (f *Flow) serve(workersCount int, in, out string, processors []string) error {
 
+	f.mu.Lock()
 	f.in = in
 	f.out = out
 	f.processors = processors
 	f.workersCount = workersCount
+	f.mu.Unlock()
 
 	reader, ok := f.In[in]
 	if !ok {
