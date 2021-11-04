@@ -68,5 +68,8 @@ func Test_flowStatus_cancelling(t *testing.T) {
 		if fs.isCancellable() {
 			t.Errorf("should be no cancellable")
 		}
+		if fs.restart() == nil {
+			t.Errorf("should not be restartable")
+		}
 	})
 }

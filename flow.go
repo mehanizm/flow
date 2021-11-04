@@ -134,6 +134,10 @@ func (f *Flow) Serve(workersCount int, in, out string, processors []string) erro
 	return err
 }
 
+func (f *Flow) Restart() error {
+	return f.status.restart()
+}
+
 func (f *Flow) serve(workersCount int, in, out string, processors []string) error {
 
 	f.mu.Lock()

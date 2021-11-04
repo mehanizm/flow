@@ -47,7 +47,7 @@ func newFlowStatus() *flowStatus {
 }
 
 func (fs *flowStatus) isStartable() bool {
-	return fs.status == WAIT_TO_START
+	return fs.status == WAIT_TO_START || fs.status == FINISHED
 }
 
 func (fs *flowStatus) isCancellable() bool {
@@ -101,6 +101,16 @@ func (fs *flowStatus) finish() {
 	fs.status = FINISHED
 	fs.ended = time.Now()
 	fs.mu.Unlock()
+}
+
+func (fs *flowStatus) restart() error {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	if !fs.isStartable() {
+		return fmt.Errorf("cannot restart flow, because status is: %v", fs.status)
+	}
+	fs = newFlowStatus()
+	return nil
 }
 
 func (fs *flowStatus) get() (Status, time.Time, time.Time, string) {
