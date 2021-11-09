@@ -8,6 +8,7 @@ import (
 
 const chanBufferDefault = 100
 
+// nolint:structcheck
 type flowConfig struct {
 	in, out      string
 	processors   []string
@@ -34,9 +35,9 @@ func NewFlow() *Flow {
 		},
 		status:  newFlowStatus(),
 		mu:      sync.Mutex{},
-		In:      make(map[string]Reader, 0),
-		Out:     make(map[string]Writer, 0),
-		Process: make(map[string]Processor, 0),
+		In:      make(map[string]Reader),
+		Out:     make(map[string]Writer),
+		Process: make(map[string]Processor),
 	}
 }
 
@@ -59,6 +60,7 @@ type Reader interface {
 // Writer output data from flow
 type Writer interface {
 	WriteDataFromChan(wg *sync.WaitGroup, outChan chan map[string]string)
+	IsFinished() <-chan struct{}
 }
 
 // Processor data in flow
@@ -105,9 +107,10 @@ func (f *Flow) Stop() error {
 		return err
 	}
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.In[f.in].Cancel()
+	<-f.Out[f.out].IsFinished()
 	f.status.cancell()
+	f.mu.Unlock()
 	return nil
 }
 
@@ -139,7 +142,6 @@ func (f *Flow) Restart() error {
 }
 
 func (f *Flow) serve(workersCount int, in, out string, processors []string) error {
-
 	f.mu.Lock()
 	f.in = in
 	f.out = out
@@ -189,5 +191,4 @@ func (f *Flow) serve(workersCount int, in, out string, processors []string) erro
 	wgWriter.Wait()
 
 	return nil
-
 }

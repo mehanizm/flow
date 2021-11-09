@@ -2,15 +2,11 @@ package flow
 
 import (
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 )
 
 func Test_flowStatus_start(t *testing.T) {
-	type fields struct {
-		mu sync.Mutex
-	}
 	tests := []struct {
 		name        string
 		status      Status

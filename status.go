@@ -109,7 +109,10 @@ func (fs *flowStatus) restart() error {
 	if !fs.isStartable() {
 		return fmt.Errorf("cannot restart flow, because status is: %v", fs.status)
 	}
-	fs = newFlowStatus()
+	fs = &flowStatus{
+		mu:     sync.Mutex{},
+		status: WAIT_TO_START,
+	}
 	return nil
 }
 

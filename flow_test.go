@@ -26,7 +26,7 @@ func newMockReader(sleep int) *mockReader {
 }
 
 func (mr *mockReader) ReadDataToChan() (inChan chan map[string]string) {
-	out := make(chan map[string]string)
+	out := make(chan map[string]string, 1)
 	go func() {
 		mr.mu.Lock()
 		mr.isReading = true
@@ -61,9 +61,18 @@ func (mr *mockReader) GetReadStatus() (countRead, countMax uint64) {
 	return 0, 0
 }
 
-type mockWriter struct{}
+type mockWriter struct {
+	isFinished chan struct{}
+}
+
+func (mw *mockWriter) IsFinished() <-chan struct{} {
+	return mw.isFinished
+}
 
 func (mw *mockWriter) WriteDataFromChan(wg *sync.WaitGroup, outChan chan map[string]string) {
+	if mw.isFinished == nil {
+		mw.isFinished = make(chan struct{}, 1)
+	}
 	defer wg.Done()
 	count := 0
 	for m := range outChan {
@@ -80,15 +89,14 @@ func (mw *mockWriter) WriteDataFromChan(wg *sync.WaitGroup, outChan chan map[str
 		if m["number1"] != m["number2"] || m["number2"] != m["number3"] {
 			panic(fmt.Sprintf("mistake in test, does not equal: %+v", m))
 		}
-		// fmt.Println(m)
 	}
 	if count == 4 {
 		fmt.Println("it was cancel event")
-		return
-	}
-	if count != testSize {
+	} else if count != testSize {
 		panic(fmt.Sprintf("mistake in test, wrong test_size: %v", count))
 	}
+	mw.isFinished <- struct{}{}
+	close(mw.isFinished)
 }
 
 type mockProcess1 struct{}
@@ -98,7 +106,7 @@ func (mp1 *mockProcess1) ProcessMessage(wg *sync.WaitGroup, inChan, outChan chan
 	for m := range inChan {
 		m["number2"] = m["number1"]
 		rand.Seed(time.Now().UnixNano())
-		n := rand.Intn(100)
+		n := rand.Intn(100) //nolint:gosec
 		time.Sleep(time.Duration(n) * time.Millisecond)
 		outChan <- m
 	}
@@ -111,14 +119,13 @@ func (mp2 *mockProcess2) ProcessMessage(wg *sync.WaitGroup, inChan, outChan chan
 	for m := range inChan {
 		m["number3"] = m["number1"]
 		rand.Seed(time.Now().UnixNano())
-		n := rand.Intn(100)
+		n := rand.Intn(100) //nolint:gosec
 		time.Sleep(time.Duration(n) * time.Millisecond)
 		outChan <- m
 	}
 }
 
 func TestFlow_Serve(t *testing.T) {
-
 	flow := NewFlow()
 	flow.AddInFlow("in", newMockReader(0))
 	flow.AddOutFlow("out", &mockWriter{})
@@ -137,14 +144,16 @@ func TestFlow_Serve(t *testing.T) {
 }
 
 func TestFlow_ServeWithCancel(t *testing.T) {
-
 	flow := NewFlow().WithChanBuffer(1)
 	flow.AddInFlow("in", newMockReader(100))
 	flow.AddOutFlow("out", &mockWriter{})
 	flow.AddProcessFlow("1", &mockProcess1{})
 	flow.AddProcessFlow("2", &mockProcess2{})
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		time.Sleep(400 * time.Millisecond)
 		err := flow.Stop()
 		if err != nil {
@@ -155,15 +164,18 @@ func TestFlow_ServeWithCancel(t *testing.T) {
 			t.Error("should be an error but not")
 		}
 	}()
-	err := flow.Serve(5, "in", "out", []string{"1", "2"})
+	err := flow.Serve(2, "in", "out", []string{"1", "2"})
 	if err != nil {
 		t.Error("was error", err)
 	}
-
+	wg.Wait()
+	status, _, _, _ := flow.GetStatus()
+	if status != CANCELLED {
+		t.Fatal("status was not cancelled", status)
+	}
 }
 
 func TestFlow_ServerWithError(t *testing.T) {
-
 	flow := NewFlow()
 	flow.SetInFlow(map[string]Reader{"in": newMockReader(0)})
 	flow.SetOutFlow(map[string]Writer{"out": &mockWriter{}})
@@ -183,5 +195,4 @@ func TestFlow_ServerWithError(t *testing.T) {
 	if err == nil {
 		t.Error("should be an error in ProcessFlow but nil")
 	}
-
 }
