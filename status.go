@@ -47,23 +47,32 @@ func newFlowStatus() *flowStatus {
 }
 
 func (fs *flowStatus) isStartable() bool {
-	return fs.status == WAIT_TO_START || fs.status == FINISHED
+	fs.mu.Lock()
+	status := fs.status
+	fs.mu.Unlock()
+	return status == WAIT_TO_START || status == FINISHED
 }
 
 func (fs *flowStatus) isCancellable() bool {
-	return fs.status == PROCESSING
+	fs.mu.Lock()
+	status := fs.status
+	fs.mu.Unlock()
+	return status == PROCESSING
 }
 
 func (fs *flowStatus) isRunning() bool {
-	return fs.status == PROCESSING
+	fs.mu.Lock()
+	status := fs.status
+	fs.mu.Unlock()
+	return status == PROCESSING
 }
 
 func (fs *flowStatus) start() error {
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
 	if !fs.isStartable() {
 		return fmt.Errorf("cannot start because the Flow is in status: %s", fs.status)
 	}
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	fs.status = PROCESSING
 	fs.started = time.Now()
 	fs.ended = time.Time{}
@@ -72,11 +81,11 @@ func (fs *flowStatus) start() error {
 }
 
 func (fs *flowStatus) cancelling() error {
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
 	if !fs.isCancellable() {
 		return fmt.Errorf("cannot cancell because the Flow is in status: %s", fs.status)
 	}
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	fs.status = CANCELLING
 	return nil
 }
@@ -104,11 +113,11 @@ func (fs *flowStatus) finish() {
 }
 
 func (fs *flowStatus) restart() error {
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
 	if !fs.isStartable() {
 		return fmt.Errorf("cannot restart flow, because status is: %v", fs.status)
 	}
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	fs = &flowStatus{
 		mu:     sync.Mutex{},
 		status: WAIT_TO_START,

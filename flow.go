@@ -19,9 +19,9 @@ type flowConfig struct {
 // Flow is the abstract flow worker
 // to operate input, output and process
 type Flow struct {
+	mu sync.Mutex
 	flowConfig
 	status  *flowStatus
-	mu      sync.Mutex
 	In      map[string]Reader
 	Out     map[string]Writer
 	Process map[string]Processor
@@ -150,17 +150,15 @@ func (f *Flow) serve(workersCount int, in, out string, processors []string) erro
 	f.out = out
 	f.processors = processors
 	f.workersCount = workersCount
-	f.mu.Unlock()
-
 	reader, ok := f.In[in]
 	if !ok {
 		return fmt.Errorf("There is no InFlow with the specified key: %v", in)
 	}
-
 	writer, ok := f.Out[out]
 	if !ok {
 		return fmt.Errorf("There is no OutFlow with the specified key: %v", out)
 	}
+	f.mu.Unlock()
 
 	processorsCount := len(processors)
 	wgWorkers := make([]*sync.WaitGroup, 0)

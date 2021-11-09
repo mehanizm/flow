@@ -62,17 +62,23 @@ func (mr *mockReader) GetReadStatus() (countRead, countMax uint64) {
 }
 
 type mockWriter struct {
+	mu         sync.Mutex
 	isFinished chan struct{}
 }
 
 func (mw *mockWriter) IsFinished() <-chan struct{} {
-	return mw.isFinished
+	mw.mu.Lock()
+	defer mw.mu.Unlock()
+	ch := mw.isFinished
+	return ch
 }
 
 func (mw *mockWriter) WriteDataFromChan(wg *sync.WaitGroup, outChan chan map[string]string) {
+	mw.mu.Lock()
 	if mw.isFinished == nil {
 		mw.isFinished = make(chan struct{}, 1)
 	}
+	mw.mu.Unlock()
 	defer wg.Done()
 	count := 0
 	for m := range outChan {
