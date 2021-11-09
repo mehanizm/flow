@@ -117,5 +117,9 @@ func (fs *flowStatus) restart() error {
 }
 
 func (fs *flowStatus) get() (Status, time.Time, time.Time, string) {
-	return fs.status, fs.started, fs.ended, fs.description
+	fs.mu.Lock()
+	status, started, ended, desc :=
+		fs.status, fs.started, fs.ended, fs.description
+	fs.mu.Unlock()
+	return status, started, ended, desc
 }

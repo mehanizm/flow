@@ -169,6 +169,7 @@ func TestFlow_ServeWithCancel(t *testing.T) {
 		t.Error("was error", err)
 	}
 	wg.Wait()
+	time.Sleep(100 * time.Microsecond)
 	status, _, _, _ := flow.GetStatus()
 	if status != CANCELLED {
 		t.Fatal("status was not cancelled", status)

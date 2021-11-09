@@ -129,11 +129,14 @@ func (f *Flow) Serve(workersCount int, in, out string, processors []string) erro
 		return err
 	}
 	err = f.serve(workersCount, in, out, processors)
-	if err != nil {
+	switch {
+	case err != nil:
 		f.status.error(err.Error())
-	} else {
+	case f.IsRunning():
 		f.status.finish()
+	default:
 	}
+
 	return err
 }
 
