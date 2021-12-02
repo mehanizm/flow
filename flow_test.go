@@ -73,6 +73,10 @@ func (mw *mockWriter) IsFinished() <-chan struct{} {
 	return ch
 }
 
+func (mw *mockWriter) GetWriteStatus() (countWrite uint64) {
+	return 0
+}
+
 func (mw *mockWriter) WriteDataFromChan(wg *sync.WaitGroup, outChan chan map[string]string) {
 	mw.mu.Lock()
 	if mw.isFinished == nil {
@@ -143,9 +147,9 @@ func TestFlow_Serve(t *testing.T) {
 		t.Error("was error", err)
 	}
 
-	status, _, _, _ := flow.GetStatus()
-	if status != FINISHED {
-		t.Errorf("wrong status: %s", status)
+	status := flow.GetStatus()
+	if status.Status != FINISHED {
+		t.Errorf("wrong status: %s", status.Status)
 	}
 }
 
@@ -176,9 +180,9 @@ func TestFlow_ServeWithCancel(t *testing.T) {
 	}
 	wg.Wait()
 	time.Sleep(100 * time.Microsecond)
-	status, _, _, _ := flow.GetStatus()
-	if status != CANCELLED {
-		t.Fatal("status was not cancelled", status)
+	status := flow.GetStatus()
+	if status.Status != CANCELLED {
+		t.Fatal("status was not cancelled", status.Status)
 	}
 }
 

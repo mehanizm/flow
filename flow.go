@@ -6,13 +6,17 @@ import (
 	"time"
 )
 
-const chanBufferDefault = 100
+const (
+	chanBufferDefault = 100
+	waitToKillDefault = 60
+)
 
 // nolint:structcheck
 type flowConfig struct {
 	in, out      string
 	processors   []string
 	chanBuffer   uint16
+	waitToKill   uint16
 	workersCount int
 }
 
@@ -32,6 +36,7 @@ func NewFlow() *Flow {
 	return &Flow{
 		flowConfig: flowConfig{
 			chanBuffer: chanBufferDefault,
+			waitToKill: waitToKillDefault,
 		},
 		status:  newFlowStatus(),
 		mu:      sync.Mutex{},
@@ -43,6 +48,11 @@ func NewFlow() *Flow {
 
 func (f *Flow) WithChanBuffer(chanBuffer uint16) *Flow {
 	f.chanBuffer = chanBuffer
+	return f
+}
+
+func (f *Flow) WithWaitToKill(waitToKill uint16) *Flow {
+	f.waitToKill = waitToKill
 	return f
 }
 
@@ -61,6 +71,7 @@ type Reader interface {
 type Writer interface {
 	WriteDataFromChan(wg *sync.WaitGroup, outChan chan map[string]string)
 	IsFinished() <-chan struct{}
+	GetWriteStatus() (countWrite uint64)
 }
 
 // Processor data in flow
@@ -108,17 +119,23 @@ func (f *Flow) Stop() error {
 	}
 	f.mu.Lock()
 	f.In[f.in].Cancel()
-	<-f.Out[f.out].IsFinished()
+	select {
+	case <-f.Out[f.out].IsFinished():
+	case <-time.After(time.Duration(f.waitToKill) * time.Second):
+	}
 	f.status.cancell()
 	f.mu.Unlock()
 	return nil
 }
 
-func (f *Flow) GetReadCounts() (countRead, countMax uint64) {
-	return f.In[f.in].GetReadStatus()
+func (f *Flow) getReadCounts() (countRead, countWrite, countMax uint64) {
+	countRead, countMax = f.In[f.in].GetReadStatus()
+	countWrite = f.Out[f.out].GetWriteStatus()
+	return
 }
 
-func (f *Flow) GetStatus() (Status, time.Time, time.Time, string) {
+func (f *Flow) GetStatus() FlowStatus {
+	f.status.updateCounts(f.getReadCounts())
 	return f.status.get()
 }
 

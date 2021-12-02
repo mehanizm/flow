@@ -37,6 +37,18 @@ type flowStatus struct {
 	status         Status
 	started, ended time.Time
 	description    string
+	countRead      uint64
+	countWrite     uint64
+	countMax       uint64
+}
+
+type FlowStatus struct {
+	Status         Status
+	Started, Ended time.Time
+	Description    string
+	CountRead      uint64
+	CountWrite     uint64
+	CountMax       uint64
 }
 
 func newFlowStatus() *flowStatus {
@@ -44,6 +56,12 @@ func newFlowStatus() *flowStatus {
 		mu:     sync.Mutex{},
 		status: WAIT_TO_START,
 	}
+}
+
+func (fs *flowStatus) updateCounts(countRead, countWrite, countMax uint64) {
+	fs.countRead = countRead
+	fs.countWrite = countWrite
+	fs.countMax = countMax
 }
 
 func (fs *flowStatus) isStartable() bool {
@@ -125,10 +143,9 @@ func (fs *flowStatus) restart() error {
 	return nil
 }
 
-func (fs *flowStatus) get() (Status, time.Time, time.Time, string) {
-	fs.mu.Lock()
-	status, started, ended, desc :=
-		fs.status, fs.started, fs.ended, fs.description
-	fs.mu.Unlock()
-	return status, started, ended, desc
+func (fs *flowStatus) get() FlowStatus {
+	return FlowStatus{
+		fs.status, fs.started, fs.ended,
+		fs.description, fs.countRead, fs.countWrite, fs.countMax,
+	}
 }
