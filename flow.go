@@ -23,7 +23,7 @@ type flowConfig struct {
 // Flow is the abstract flow worker
 // to operate input, output and process
 type Flow struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 	flowConfig
 	status  *flowStatus
 	In      map[string]Reader
@@ -39,7 +39,7 @@ func NewFlow() *Flow {
 			waitToKill: waitToKillDefault,
 		},
 		status:  newFlowStatus(),
-		mu:      sync.Mutex{},
+		mu:      sync.RWMutex{},
 		In:      make(map[string]Reader),
 		Out:     make(map[string]Writer),
 		Process: make(map[string]Processor),
@@ -117,22 +117,25 @@ func (f *Flow) Stop() error {
 	if err != nil {
 		return err
 	}
-	f.mu.Lock()
+	f.mu.RLock()
 	f.In[f.in].Cancel()
+	writer := f.Out[f.out]
+	f.mu.RUnlock()
 	select {
-	case <-f.Out[f.out].IsFinished():
+	case <-writer.IsFinished():
 	case <-time.After(time.Duration(f.waitToKill) * time.Second):
 	}
 	f.status.cancell()
-	f.mu.Unlock()
 	return nil
 }
 
 func (f *Flow) getReadCounts() (countRead, countWrite, countMax uint64) {
-	f.mu.Lock()
-	countRead, countMax = f.In[f.in].GetReadStatus()
-	countWrite = f.Out[f.out].GetWriteStatus()
-	f.mu.Unlock()
+	f.mu.RLock()
+	reader := f.In[f.in]
+	writer := f.Out[f.out]
+	f.mu.RUnlock()
+	countRead, countMax = reader.GetReadStatus()
+	countWrite = writer.GetWriteStatus()
 	return
 }
 
