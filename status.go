@@ -59,9 +59,11 @@ func newFlowStatus() *flowStatus {
 }
 
 func (fs *flowStatus) updateCounts(countRead, countWrite, countMax uint64) {
+	fs.mu.Lock()
 	fs.countRead = countRead
 	fs.countWrite = countWrite
 	fs.countMax = countMax
+	fs.mu.Unlock()
 }
 
 func (fs *flowStatus) isStartable() bool {
@@ -144,8 +146,11 @@ func (fs *flowStatus) restart() error {
 }
 
 func (fs *flowStatus) get() FlowStatus {
-	return FlowStatus{
+	fs.mu.Lock()
+	status := FlowStatus{
 		fs.status, fs.started, fs.ended,
 		fs.description, fs.countRead, fs.countWrite, fs.countMax,
 	}
+	fs.mu.Unlock()
+	return status
 }

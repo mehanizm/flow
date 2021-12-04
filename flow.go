@@ -129,8 +129,10 @@ func (f *Flow) Stop() error {
 }
 
 func (f *Flow) getReadCounts() (countRead, countWrite, countMax uint64) {
+	f.mu.Lock()
 	countRead, countMax = f.In[f.in].GetReadStatus()
 	countWrite = f.Out[f.out].GetWriteStatus()
+	f.mu.Unlock()
 	return
 }
 
