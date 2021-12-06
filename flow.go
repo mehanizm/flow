@@ -150,9 +150,12 @@ func (f *Flow) GetStatus() FlowStatus {
 }
 
 // Serve flow in concurrent mode
+// returned error also save in description of the flow status
+// so we can not check it at the moment
 func (f *Flow) Serve(workersCount int, in, out string, processors []string) error {
 	err := f.status.start()
 	if err != nil {
+		f.status.error(err.Error())
 		return err
 	}
 	err = f.serve(workersCount, in, out, processors)
