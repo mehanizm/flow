@@ -139,8 +139,12 @@ func (f *Flow) getReadCounts() (countRead, countWrite, countMax uint64) {
 	reader := f.In[f.in]
 	writer := f.Out[f.out]
 	f.mu.RUnlock()
-	countRead, countMax = reader.GetReadStatus()
-	countWrite = writer.GetWriteStatus()
+	if reader != nil {
+		countRead, countMax = reader.GetReadStatus()
+	}
+	if writer != nil {
+		countWrite = writer.GetWriteStatus()
+	}
 	return
 }
 
