@@ -119,6 +119,9 @@ func (fs *flowStatus) cancell() {
 
 func (fs *flowStatus) error(err string) {
 	fs.mu.Lock()
+	if fs.status == NOT_EXIST {
+		fs.started = time.Now()
+	}
 	fs.status = ERROR
 	fs.ended = time.Now()
 	fs.description = err

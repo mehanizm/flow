@@ -56,6 +56,11 @@ func (f *Flow) WithWaitToKill(waitToKill uint16) *Flow {
 	return f
 }
 
+func (f *Flow) WithError(err string) *Flow {
+	f.status.error(err)
+	return f
+}
+
 func (f *Flow) IsRunning() bool {
 	return f.status.isRunning()
 }
