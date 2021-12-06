@@ -70,6 +70,13 @@ func (fs *flowStatus) isStartable() bool {
 	fs.mu.Lock()
 	status := fs.status
 	fs.mu.Unlock()
+	return status == WAIT_TO_START
+}
+
+func (fs *flowStatus) isRestartable() bool {
+	fs.mu.Lock()
+	status := fs.status
+	fs.mu.Unlock()
 	return status == WAIT_TO_START || status == FINISHED
 }
 
@@ -77,7 +84,7 @@ func (fs *flowStatus) isCancellable() bool {
 	fs.mu.Lock()
 	status := fs.status
 	fs.mu.Unlock()
-	return status == PROCESSING
+	return status == WAIT_TO_START || status == PROCESSING
 }
 
 func (fs *flowStatus) isRunning() bool {
@@ -136,7 +143,7 @@ func (fs *flowStatus) finish() {
 }
 
 func (fs *flowStatus) restart() error {
-	if !fs.isStartable() {
+	if !fs.isRestartable() {
 		return fmt.Errorf("cannot restart flow, because status is: %v", fs.status)
 	}
 	fs.mu.Lock()

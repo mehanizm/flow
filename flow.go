@@ -65,6 +65,10 @@ func (f *Flow) IsRunning() bool {
 	return f.status.isRunning()
 }
 
+func (f *Flow) IsStartable() bool {
+	return f.status.isStartable()
+}
+
 // Reader input data to flow
 type Reader interface {
 	ReadDataToChan() (inChan chan map[string]string)
